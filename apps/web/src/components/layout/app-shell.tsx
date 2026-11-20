@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { LogOut, Menu, Ship, X } from 'lucide-react';
+import { LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/components/auth/auth-provider';
 import { cn } from '@/lib/utils';
+import { Logo } from './logo';
 import { NAV_ITEMS } from './nav-items';
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -73,6 +74,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {open ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
+          <Logo size={20} />
           <span className="font-semibold">StackDock</span>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">
@@ -86,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function Brand() {
   return (
     <div className="flex h-14 items-center gap-2 border-b px-5">
-      <Ship className="size-5" aria-hidden />
+      <Logo size={22} />
       <span className="font-semibold tracking-tight">StackDock</span>
     </div>
   );

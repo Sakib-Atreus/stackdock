@@ -5,7 +5,7 @@ import {
   type ApiSuccess,
   type SessionInfo,
 } from '@stackdock/shared';
-import { Loader2, Ship } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError, apiSend } from '@/lib/api';
 import { safeNextPath } from '@/lib/safe-next';
+import { Logo } from '@/components/layout/logo';
 import { useAuth } from './auth-provider';
 
 export function LoginForm() {
@@ -70,7 +71,7 @@ export function LoginForm() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-2 flex items-center gap-2">
-            <Ship className="size-5" aria-hidden />
+            <Logo size={28} />
             <span className="font-semibold tracking-tight">StackDock</span>
           </div>
           <CardTitle>
