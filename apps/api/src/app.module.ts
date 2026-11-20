@@ -8,9 +8,11 @@ import { AuthGuard } from './modules/auth/auth.guard.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CryptoModule } from './modules/crypto/crypto.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { NorthflankModule } from './modules/northflank/northflank.module.js';
 import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { ProjectsModule } from './modules/projects/projects.module.js';
 import { ProvidersModule } from './modules/providers/providers.module.js';
+import { RunnerModule } from './modules/runner/runner.module.js';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { ProvidersModule } from './modules/providers/providers.module.js';
     HealthModule,
     ProvidersModule,
     ProjectsModule,
+    RunnerModule,
+    NorthflankModule,
   ],
   providers: [
     // Order matters: rate limit → CSRF → authentication.

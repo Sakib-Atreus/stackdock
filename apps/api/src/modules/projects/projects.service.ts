@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Prisma, type Project } from '@stackdock/db';
 import type {
   CreateProjectInput,
@@ -9,6 +9,8 @@ import type {
 import { AppError } from '../../common/errors/app-error.js';
 import { ActivityService } from '../activity/activity.service.js';
 import { EncryptionService } from '../crypto/encryption.service.js';
+import { ENV, type Env } from '../../config/env.js';
+import { ownUrlFor } from '../northflank/own-url.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { lowestFreePort } from './project-ports.js';
 
@@ -34,6 +36,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly activity: ActivityService,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   async list(includeArchived: boolean): Promise<ProjectView[]> {
@@ -44,11 +47,11 @@ export class ProjectsService {
       orderBy: { createdAt: 'asc' },
       include: { _count: { select: { envVars: true } } },
     });
-    return rows.map(toView);
+    return rows.map((r) => toView(r, this.env.NF_HOSTS));
   }
 
   async get(slug: string): Promise<ProjectView> {
-    return toView(await this.find(slug));
+    return toView(await this.find(slug), this.env.NF_HOSTS);
   }
 
   async create(input: CreateProjectInput): Promise<ProjectView> {
@@ -92,7 +95,7 @@ export class ProjectsService {
           targetId: row.id,
           safeMetadata: { slug: row.slug, repo: row.repoUrl },
         });
-        return toView(row);
+        return toView(row, this.env.NF_HOSTS);
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
         const slugNowTaken = await this.prisma.client.project.findUnique({
@@ -123,7 +126,7 @@ export class ProjectsService {
     const changed = (
       Object.keys(input) as Array<keyof UpdateProjectInput>
     ).filter((k) => input[k] !== undefined && input[k] !== project[k]);
-    if (changed.length === 0) return toView(project);
+    if (changed.length === 0) return toView(project, this.env.NF_HOSTS);
 
     const row = await this.prisma.client.project.update({
       where: { id: project.id },
@@ -137,32 +140,32 @@ export class ProjectsService {
       targetId: row.id,
       safeMetadata: { slug: row.slug, fields: changed },
     });
-    return toView(row);
+    return toView(row, this.env.NF_HOSTS);
   }
 
   /** "Remove from dashboard" (reversible). Never touches Northflank. */
   async archive(slug: string): Promise<ProjectView> {
     const project = await this.find(slug);
-    if (project.archivedAt) return toView(project);
+    if (project.archivedAt) return toView(project, this.env.NF_HOSTS);
     const row = await this.prisma.client.project.update({
       where: { id: project.id },
       data: { archivedAt: new Date(), desiredState: 'STOPPED' },
       include: { _count: { select: { envVars: true } } },
     });
     await this.audit('project.archived', row);
-    return toView(row);
+    return toView(row, this.env.NF_HOSTS);
   }
 
   async restore(slug: string): Promise<ProjectView> {
     const project = await this.find(slug);
-    if (!project.archivedAt) return toView(project);
+    if (!project.archivedAt) return toView(project, this.env.NF_HOSTS);
     const row = await this.prisma.client.project.update({
       where: { id: project.id },
       data: { archivedAt: null },
       include: { _count: { select: { envVars: true } } },
     });
     await this.audit('project.restored', row);
-    return toView(row);
+    return toView(row, this.env.NF_HOSTS);
   }
 
   /** Permanent. Only for archived projects, and the caller must retype the slug. */
@@ -173,6 +176,24 @@ export class ProjectsService {
         HttpStatus.CONFLICT,
         'PROJECT_NOT_ARCHIVED',
         'Archive the project before deleting it permanently.',
+      );
+    }
+    if (
+      await this.prisma.client.projectDatabase.findUnique({
+        where: { projectId: project.id },
+      })
+    ) {
+      throw new AppError(
+        HttpStatus.CONFLICT,
+        'PROJECT_HAS_DATABASE',
+        'Delete the project database first (Database section). This makes data loss an explicit choice.',
+      );
+    }
+    if (project.exposedAt) {
+      throw new AppError(
+        HttpStatus.CONFLICT,
+        'PROJECT_EXPOSED',
+        "Remove the project's own URL (Northflank port) first.",
       );
     }
     if (confirmSlug !== project.slug) {
@@ -306,7 +327,7 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
-export function toView(row: ProjectWithCount): ProjectView {
+export function toView(row: ProjectWithCount, nfHosts?: string): ProjectView {
   return {
     id: row.id,
     slug: row.slug,
@@ -330,5 +351,7 @@ export function toView(row: ProjectWithCount): ProjectView {
     updatedAt: row.updatedAt.toISOString(),
     envVarCount: row._count.envVars,
     pathUrl: `/apps/${row.slug}/`,
+    exposed: row.exposedAt !== null,
+    ownUrl: row.exposedAt ? ownUrlFor(row.slug, nfHosts) : null,
   };
 }

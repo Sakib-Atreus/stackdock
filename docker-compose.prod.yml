@@ -1,0 +1,47 @@
+# Production-style stack: Postgres + StackDock (one container).
+# Used to test the production image locally, and as the base for self-hosting.
+#
+#   cp .env.example .env.prod   # fill in strong secrets, NODE_ENV=production
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stackdock
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: stackdock
+    volumes:
+      - stackdock-prod-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U stackdock -d stackdock']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Not published to the host: only StackDock can reach it.
+
+  stackdock:
+    build:
+      context: .
+      target: production
+    image: stackdock:production
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://stackdock:${POSTGRES_PASSWORD}@db:5432/stackdock
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY}
+      ROUTING_MODE: ${ROUTING_MODE:-path}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    ports:
+      - '127.0.0.1:${STACKDOCK_PORT:-8080}:8080'
+    volumes:
+      - stackdock-prod-data:/data
+
+volumes:
+  stackdock-prod-pg:
+  stackdock-prod-data:

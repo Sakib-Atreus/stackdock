@@ -20,6 +20,24 @@ const LABELS: Record<string, string> = {
   'provider.tested': 'Northflank connection tested',
   'provider.disconnected': 'Northflank disconnected',
   'secrets.reencrypted': 'Secrets re-encrypted',
+  'project.created': 'Project created',
+  'project.updated': 'Project updated',
+  'project.archived': 'Project archived',
+  'project.restored': 'Project restored',
+  'project.deleted': 'Project deleted',
+  'project.env_set': 'Env variable set',
+  'project.env_deleted': 'Env variable deleted',
+  'project.deploy_requested': 'Deploy requested',
+  'project.deployed': 'Deployed',
+  'project.deploy_cancelled': 'Deploy cancelled',
+  'project.stopped': 'Project stopped',
+  'project.restarted': 'Project restarted',
+  'project.crashed': 'Project crashed',
+  'project.db_created': 'Database created',
+  'project.db_deleted': 'Database deleted',
+  'project.exposed': 'Own URL added',
+  'project.unexposed': 'Own URL removed',
+  'northflank.build_started': 'Northflank build started',
 };
 
 export function ActivityList() {
@@ -134,6 +152,9 @@ function describe(item: ActivityItem): string {
   const m = item.metadata;
   if (!m) return '';
   const parts: string[] = [];
+  if (typeof m.slug === 'string') parts.push(m.slug);
+  if (typeof m.key === 'string') parts.push(m.key);
+  if (typeof m.commit === 'string') parts.push(m.commit);
   if (typeof m.ip === 'string') parts.push(`IP ${m.ip}`);
   if (typeof m.team === 'string') parts.push(`team ${m.team}`);
   if (typeof m.code === 'string') parts.push(m.code);

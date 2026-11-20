@@ -1,7 +1,26 @@
 import { Logger } from '@nestjs/common';
 import type { z } from 'zod';
 import { codeForStatus, NorthflankError } from './northflank.errors.js';
-import { type NfAuthInfo, nfAuthInfoSchema } from './northflank.types.js';
+import {
+  type NfAuthInfo,
+  nfAuthInfoSchema,
+  nfBuildsSchema,
+  nfPatchServiceSchema,
+  type NfPort,
+  nfProjectsSchema,
+  type NfService,
+  nfServiceSchema,
+  nfServicesSchema,
+  nfStartBuildSchema,
+} from './northflank.types.js';
+
+/** Northflank IDs are slugs; anything else never reaches a URL path. */
+const ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
+function id(value: string): string {
+  if (!ID.test(value)) throw new NorthflankError('NF_REQUEST_REJECTED');
+  return value;
+}
+const MAX_PAGES = 10;
 
 const TIMEOUT_MS = 10_000;
 const MAX_GET_ATTEMPTS = 3;
@@ -40,6 +59,94 @@ export class NorthflankClient {
   /** Verifies the token and returns its (non-secret) details. */
   async getAuthInfo(): Promise<NfAuthInfo> {
     return (await this.get('auth', nfAuthInfoSchema)).data;
+  }
+
+  /** All projects visible to the token (follows cursor pagination). */
+  async listProjects() {
+    return this.paginate('projects', nfProjectsSchema, (d) => d.data.projects);
+  }
+
+  async listServices(projectId: string) {
+    return this.paginate(
+      `projects/${id(projectId)}/services`,
+      nfServicesSchema,
+      (d) => d.data.services,
+    );
+  }
+
+  async getService(projectId: string, serviceId: string): Promise<NfService> {
+    return (
+      await this.get(
+        `projects/${id(projectId)}/services/${id(serviceId)}`,
+        nfServiceSchema,
+      )
+    ).data;
+  }
+
+  /** Most recent builds (first page only). */
+  async listBuilds(projectId: string, serviceId: string) {
+    return (
+      await this.get(
+        `projects/${id(projectId)}/services/${id(serviceId)}/build?per_page=20`,
+        nfBuildsSchema,
+      )
+    ).data.builds;
+  }
+
+  /** Never retried automatically (it is not idempotent). */
+  async startBuild(
+    projectId: string,
+    serviceId: string,
+    body: { branch?: string; sha?: string },
+  ) {
+    return (
+      await this.request(
+        'POST',
+        `projects/${id(projectId)}/services/${id(serviceId)}/build`,
+        nfStartBuildSchema,
+        body,
+      )
+    ).data;
+  }
+
+  /**
+   * Replaces the service's port list. Always send the COMPLETE list: the API
+   * docs don't say whether `ports` merges or replaces, so a full list is
+   * correct either way. Changing ports redeploys the service.
+   */
+  async setServicePorts(
+    projectId: string,
+    serviceId: string,
+    serviceType: 'combined' | 'deployment',
+    ports: NfPort[],
+  ): Promise<void> {
+    await this.request(
+      'PATCH',
+      `projects/${id(projectId)}/services/${serviceType}/${id(serviceId)}`,
+      nfPatchServiceSchema,
+      { ports },
+    );
+  }
+
+  private async paginate<T extends z.ZodType, Item>(
+    path: string,
+    schema: T,
+    items: (data: z.infer<T>) => Item[],
+  ): Promise<Item[]> {
+    const all: Item[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const qs = new URLSearchParams({ per_page: '100' });
+      if (cursor) qs.set('cursor', cursor);
+      const data = await this.get(`${path}?${qs}`, schema);
+      all.push(...items(data));
+      const p = (
+        data as { pagination?: { hasNextPage: boolean; cursor?: string } }
+      ).pagination;
+      if (!p?.hasNextPage || !p.cursor) break;
+      cursor = p.cursor;
+    }
+    return all;
   }
 
   private async get<T extends z.ZodType>(

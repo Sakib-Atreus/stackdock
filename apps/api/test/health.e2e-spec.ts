@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module.js';
 import { ApiExceptionFilter } from '../src/common/filters/api-exception.filter.js';
 import { API_PREFIX } from '../src/create-app.js';
 import { PrismaService } from '../src/modules/prisma/prisma.service.js';
+import { RunnerService } from '../src/modules/runner/runner.service.js';
 
 const env = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/unused',
@@ -22,6 +23,9 @@ describe('GET /api/v1/health', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      // The runner needs a real database; health doesn't.
+      .overrideProvider(RunnerService)
+      .useValue({ livePort: () => null })
       .compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix(API_PREFIX);

@@ -134,3 +134,81 @@ describe('NorthflankClient', () => {
     expect(error.message).not.toContain(TOKEN);
   });
 });
+
+describe('NorthflankClient listing and actions', () => {
+  it('follows cursor pagination for projects', async () => {
+    const { c, calls } = client([
+      json(200, {
+        data: { projects: [{ id: 'a', name: 'A' }] },
+        pagination: { hasNextPage: true, cursor: 'c'.repeat(24), count: 1 },
+      }),
+      json(200, {
+        data: { projects: [{ id: 'b', name: 'B' }] },
+        pagination: { hasNextPage: false, count: 1 },
+      }),
+    ]);
+    const projects = await c.listProjects();
+    expect(projects.map((p) => p.id)).toEqual(['a', 'b']);
+    expect(calls[0]!.url).toBe(
+      'https://api.northflank.test/v1/projects?per_page=100',
+    );
+    expect(calls[1]!.url).toContain(`cursor=${'c'.repeat(24)}`);
+  });
+
+  it('refuses IDs that could change the request path', async () => {
+    const { c, calls } = client([]);
+    await expectNfError(c.listServices('../auth'), 'NF_REQUEST_REJECTED');
+    await expectNfError(c.getService('ok', 'x/../../y'), 'NF_REQUEST_REJECTED');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('never retries starting a build', async () => {
+    const { c, calls } = client([json(503, {})]);
+    await expectNfError(
+      c.startBuild('p', 's', { branch: 'main' }),
+      'NF_UNAVAILABLE',
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ branch: 'main' });
+  });
+
+  it('patches the full port list on the right service type path', async () => {
+    const { c, calls } = client([json(200, { data: { id: 'stackdock' } })]);
+    const ports = [
+      { name: 'dash', internalPort: 8080, public: true, protocol: 'HTTP' },
+      { name: 'shop', internalPort: 10001, public: true, protocol: 'HTTP' },
+    ];
+    await c.setServicePorts('proj', 'stackdock', 'combined', ports);
+    expect(calls[0]!.url).toBe(
+      'https://api.northflank.test/v1/projects/proj/services/combined/stackdock',
+    );
+    expect(calls[0]!.init.method).toBe('PATCH');
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ ports });
+  });
+
+  it('keeps unknown port fields (e.g. security) when reading a service', async () => {
+    const { c } = client([
+      json(200, {
+        data: {
+          id: 's',
+          name: 'S',
+          serviceType: 'combined',
+          ports: [
+            {
+              name: 'dash',
+              internalPort: 8080,
+              public: true,
+              protocol: 'HTTP',
+              security: { sso: { enabled: true } },
+            },
+          ],
+        },
+      }),
+    ]);
+    const service = await c.getService('p', 's');
+    expect(service.ports![0]).toMatchObject({
+      security: { sso: { enabled: true } },
+    });
+  });
+});

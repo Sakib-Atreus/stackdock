@@ -37,7 +37,7 @@ export function createTestPrisma(): PrismaClient {
 
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "Session", "AdminUser", "ActivityLog", "ProviderConnection", "ProjectEnvVar", "Project" RESTART IDENTITY CASCADE',
+    'TRUNCATE "Session", "AdminUser", "ActivityLog", "ProviderConnection", "ProjectEnvVar", "ProjectDatabase", "Deployment", "Project" RESTART IDENTITY CASCADE',
   );
 }
 
@@ -65,4 +65,26 @@ export async function signInAsAdmin(
     .send({ email: 'admin@example.com', password });
   const raw = res.headers['set-cookie'] as unknown as string[];
   return raw.find((c) => c.startsWith('sd_session='))!.split(';')[0]!;
+}
+
+/** Polls until fn returns a truthy value or the timeout passes. */
+export async function waitFor<T>(
+  fn: () => Promise<T | null | undefined | false>,
+  timeoutMs = 60_000,
+  label = 'condition',
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let last: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const value = await fn();
+      if (value) return value;
+    } catch (e) {
+      last = e;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(
+    `Timed out waiting for ${label}${last ? `: ${String(last)}` : ''}`,
+  );
 }

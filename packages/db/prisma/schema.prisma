@@ -131,10 +131,14 @@ model Project {
   desiredState    DesiredState   @default(STOPPED)
   lastCommitSha   String?
   lastDeployedAt  DateTime?
+  /// When a public Northflank port (own URL) was added for this project (D-15).
+  exposedAt       DateTime?
   archivedAt      DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   envVars         ProjectEnvVar[]
+  deployments     Deployment[]
+  database        ProjectDatabase?
 
   @@index([archivedAt])
 }
@@ -151,4 +155,59 @@ model ProjectEnvVar {
   updatedAt      DateTime @updatedAt
 
   @@unique([projectId, key])
+}
+
+enum DeploymentStatus {
+  QUEUED
+  CLONING
+  INSTALLING
+  BUILDING
+  STARTING
+  LIVE
+  SUPERSEDED
+  STOPPED
+  FAILED
+  CANCELLED
+}
+
+enum DeploymentTrigger {
+  MANUAL
+  BOOT
+}
+
+/// One build-and-start attempt of a project.
+model Deployment {
+  id            String            @id @default(cuid())
+  projectId     String
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status        DeploymentStatus  @default(QUEUED)
+  trigger       DeploymentTrigger @default(MANUAL)
+  branch        String
+  commitSha     String?
+  commitMessage String?
+  /// Runtime actually used (after auto-detection).
+  runtime       ProjectRuntime?
+  /// Short, safe failure reason shown in the UI.
+  errorSummary  String?
+  /// Build output (secrets redacted, truncated).
+  log           String            @default("")
+  queuedAt      DateTime          @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+
+  @@index([projectId, queuedAt])
+  @@index([status])
+}
+
+/// A Postgres database + login role provisioned for one project (D-12).
+model ProjectDatabase {
+  id                String   @id @default(cuid())
+  projectId         String   @unique
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  dbName            String   @unique
+  roleName          String   @unique
+  /// Encrypted (AAD = projectdb:<projectId>).
+  encryptedPassword String
+  keyVersion        Int
+  createdAt         DateTime @default(now())
 }

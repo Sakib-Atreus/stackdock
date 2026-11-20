@@ -4,6 +4,7 @@ import {
   RUNTIME_DEFAULTS,
   RUNTIME_LABELS,
   type ApiSuccess,
+  type DeploymentView,
   type ProjectView,
 } from '@stackdock/shared';
 import {
@@ -29,21 +30,21 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LinkButton } from '@/components/ui/link-button';
 import { ApiError, apiSend } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useApi } from '@/lib/use-api';
+import { DatabaseCard } from '@/components/runner/database-card';
+import { DeployPanel } from '@/components/runner/deploy-panel';
+import { DeploymentsCard } from '@/components/runner/deployments-card';
+import { isActiveDeployment } from '@/components/runner/deployment-status-badge';
+import { RuntimeLogsCard } from '@/components/runner/runtime-logs-card';
+import { apiFetch } from '@/lib/api';
+import { usePolling } from '@/lib/use-polling';
 import { EnvVarsCard } from './env-vars-card';
-import { ProjectStatusBadge } from './project-status-badge';
 
 type Dialog = 'archive' | 'delete' | null;
 
@@ -57,6 +58,32 @@ export function ProjectDetail() {
   const [busy, setBusy] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const deployments = useApi<ApiSuccess<DeploymentView[]>>(
+    `/projects/${encodeURIComponent(slug)}/deployments`,
+  );
+
+  const project = state.status === 'success' ? state.data.data : null;
+  const list =
+    deployments.state.status === 'success' ? deployments.state.data.data : [];
+  const active = list.find((d) => isActiveDeployment(d.status)) ?? null;
+  const transient =
+    project !== null &&
+    ['QUEUED', 'BUILDING', 'STARTING'].includes(project.status);
+
+  // Live updates while something is happening; slow refresh otherwise.
+  const refresh = async () => {
+    const [p, d] = await Promise.all([
+      apiFetch<ApiSuccess<ProjectView>>(
+        `/projects/${encodeURIComponent(slug)}`,
+      ),
+      apiFetch<ApiSuccess<DeploymentView[]>>(
+        `/projects/${encodeURIComponent(slug)}/deployments`,
+      ),
+    ]);
+    setData(p);
+    deployments.setData(d);
+  };
+  usePolling(refresh, active || transient ? 2_000 : 15_000, project !== null);
 
   if (!slug) return <BackLink />;
   if (state.status === 'loading') {
@@ -176,34 +203,11 @@ export function ProjectDetail() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle>
-                <h2>Status</h2>
-              </CardTitle>
-              <ProjectStatusBadge status={p.status} archived={isArchived} />
-            </div>
-            <CardDescription>Deploying arrives in Phase 5.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Details>
-              <Row label="Short name">
-                <span className="font-mono">{p.slug}</span>
-              </Row>
-              <Row label="URL (fallback)">
-                <span className="font-mono">{p.pathUrl}</span>
-              </Row>
-              <Row label="Own URL">
-                Added when deployed on Northflank (Phase 6)
-              </Row>
-              <Row label="Last deployed">
-                {formatDateTime(p.lastDeployedAt)}
-              </Row>
-              <Row label="Created">{formatDateTime(p.createdAt)}</Row>
-            </Details>
-          </CardContent>
-        </Card>
+        <DeployPanel
+          project={p}
+          activeDeployment={active}
+          onChanged={() => void refresh()}
+        />
 
         <Card>
           <CardHeader>
@@ -218,10 +222,13 @@ export function ProjectDetail() {
                   href={p.repoUrl}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="inline-flex items-center gap-1 underline underline-offset-4"
+                  className="break-all underline underline-offset-4"
                 >
                   {p.repoUrl.replace('https://github.com/', '')}
-                  <ExternalLink className="size-3" aria-hidden />
+                  <ExternalLink
+                    className="ml-1 inline size-3 align-baseline"
+                    aria-hidden
+                  />
                 </a>
               </Row>
               <Row label="Branch">
@@ -248,7 +255,12 @@ export function ProjectDetail() {
         </Card>
       </div>
 
-      <EnvVarsCard slug={p.slug} readOnly={isArchived} />
+      <DeploymentsCard deployments={list} onChanged={() => void refresh()} />
+      <RuntimeLogsCard slug={p.slug} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <EnvVarsCard slug={p.slug} readOnly={isArchived} />
+        <DatabaseCard slug={p.slug} readOnly={isArchived} />
+      </div>
 
       <AlertDialog
         open={dialog === 'archive'}

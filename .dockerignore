@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/out
+**/.next
+**/.turbo
+**/coverage
+**/src/generated
+**/test-results
+**/playwright-report
+.data
+.env
+.env.*
+!.env.example
+.git
+*.log
+.DS_Store

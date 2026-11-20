@@ -7,3 +7,10 @@ allowBuilds:
   prisma: true
   sharp: false
   unrs-resolver: false
+
+# Security: Prisma 7.10 pins effect@3.20.0, affected by a ReDoS advisory in
+# Schema.TemplateLiteral (patched in >=3.22.1). 3.22.4 is the same major
+# version and older than pnpm's 24h minimumReleaseAge policy. Verified with
+# prisma generate/migrate and the full test suite.
+overrides:
+  effect: 3.22.4

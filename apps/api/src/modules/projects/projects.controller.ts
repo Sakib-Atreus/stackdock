@@ -24,6 +24,7 @@ import {
   updateProjectSchema,
 } from '@stackdock/shared';
 import { z } from 'zod';
+import { RunnerService } from '../runner/runner.service.js';
 import { ProjectsService } from './projects.service.js';
 
 /** Lookup-only validation: anything else can't exist, so it's a 404 path. */
@@ -37,7 +38,10 @@ const deleteBody = z.object({ confirmSlug: z.string().max(64) });
 
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly runner: RunnerService,
+  ) {}
 
   @Get()
   async list(
@@ -74,7 +78,9 @@ export class ProjectsController {
   async archive(
     @Param('slug', { schema: slugParam }) slug: string,
   ): Promise<ApiSuccess<ProjectView>> {
-    return { data: await this.projects.archive(slug) };
+    const view = await this.projects.archive(slug);
+    await this.runner.teardown(slug, false);
+    return { data: view };
   }
 
   @Post(':slug/restore')
@@ -91,6 +97,7 @@ export class ProjectsController {
     @Body({ schema: deleteBody }) body: z.infer<typeof deleteBody>,
   ): Promise<ApiSuccess<{ deleted: true }>> {
     await this.projects.delete(slug, body.confirmSlug);
+    await this.runner.teardown(slug, true);
     return { data: { deleted: true } };
   }
 

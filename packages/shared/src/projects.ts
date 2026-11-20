@@ -194,6 +194,10 @@ export interface ProjectView {
   envVarCount: number;
   /** Path-based URL (always available, D-15 fallback). */
   pathUrl: string;
+  /** A public Northflank port was added for this project. */
+  exposed: boolean;
+  /** Its https://<slug>--….code.run URL once Northflank has applied it. */
+  ownUrl: string | null;
 }
 
 // ── Environment variables ───────────────────────────────────────────────

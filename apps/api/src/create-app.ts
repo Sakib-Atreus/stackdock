@@ -7,6 +7,8 @@ import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter.js';
 import { ENV, type Env } from './config/env.js';
+import { inlineScriptHashes } from './csp.js';
+import { ProxyService } from './modules/runner/proxy.service.js';
 import { serveStaticWeb } from './static-web.js';
 
 export const API_PREFIX = 'api/v1';
@@ -23,15 +25,28 @@ export async function createApp(
 
   app.disable('x-powered-by');
   if (env.TRUST_PROXY > 0) app.set('trust proxy', env.TRUST_PROXY);
+
+  // Project traffic (/apps/<slug>/…) is proxied before StackDock's own
+  // middleware, so projects get their own headers (no StackDock CSP etc.).
+  const proxy = app.get(ProxyService);
+  app.use(proxy.pathMiddleware);
+  app.getHttpServer().on('upgrade', (req, socket, head) => {
+    if (!proxy.handleUpgrade(req, socket, head)) socket.destroy();
+  });
+  const webDir =
+    env.WEB_DIST_DIR ?? path.resolve(import.meta.dirname, '../../web/out');
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
-          // Next.js static export uses inline bootstrap scripts.
-          // TODO(Phase 7): replace 'unsafe-inline' with hashes.
-          'script-src': ["'self'", "'unsafe-inline'"],
+          // Exact hashes of the static UI's inline scripts (no 'unsafe-inline').
+          'script-src': ["'self'", ...inlineScriptHashes(webDir)],
+          'connect-src': ["'self'"],
+          'frame-ancestors': ["'none'"],
         },
       },
+      // Keep the dashboard out of other sites' frames entirely.
+      frameguard: { action: 'deny' },
     }),
   );
 
@@ -47,8 +62,6 @@ export async function createApp(
     });
   }
 
-  const webDir =
-    env.WEB_DIST_DIR ?? path.resolve(import.meta.dirname, '../../web/out');
   const served = serveStaticWeb(app, webDir);
   if (options.logger !== false) {
     new Logger('Bootstrap').log(

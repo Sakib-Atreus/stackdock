@@ -20,7 +20,18 @@ export type ActivityAction =
   | 'project.restored'
   | 'project.deleted'
   | 'project.env_set'
-  | 'project.env_deleted';
+  | 'project.env_deleted'
+  | 'project.deploy_requested'
+  | 'project.deployed'
+  | 'project.deploy_cancelled'
+  | 'project.stopped'
+  | 'project.restarted'
+  | 'project.crashed'
+  | 'project.db_created'
+  | 'project.db_deleted'
+  | 'project.exposed'
+  | 'project.unexposed'
+  | 'northflank.build_started';
 
 export interface ActivityEntry {
   action: ActivityAction;

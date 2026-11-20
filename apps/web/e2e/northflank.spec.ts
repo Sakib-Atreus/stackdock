@@ -73,11 +73,15 @@ test('connect, test, replace-cancel and disconnect Northflank; token never expos
 
   // Activity log records it all
   await page.getByRole('link', { name: 'Activity' }).click();
-  await expect(page.getByText('Northflank disconnected')).toBeVisible();
-  // One failed attempt (wrong token) + one success.
+  // (Other tests also write to the shared log, so check the newest entries.)
+  const rows = page.getByRole('listitem');
+  await expect(rows.nth(0)).toContainText('Northflank disconnected');
   await expect(
-    page.getByText('Northflank connected', { exact: true }),
-  ).toHaveCount(2);
+    rows
+      .filter({ hasText: 'Northflank connected' })
+      .filter({ hasText: 'Failed' })
+      .first(),
+  ).toBeVisible();
 
   // The token never came back from the API.
   expect(responses.join('\n')).not.toContain(VALID_TOKEN);

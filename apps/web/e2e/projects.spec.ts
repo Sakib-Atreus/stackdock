@@ -21,7 +21,9 @@ test('project lifecycle: create, env vars, edit, archive, restore, delete', asyn
   });
 
   await signIn(page, '/projects');
-  await expect(page.getByText('No projects yet')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Projects', exact: true }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'New project' }).first().click();
 
   // Client-side validation
@@ -108,7 +110,7 @@ test('project lifecycle: create, env vars, edit, archive, restore, delete', asyn
     .click();
   await expect(page.getByText(/Archived on/)).toBeVisible();
   await page.getByRole('link', { name: 'Projects' }).first().click();
-  await expect(page.getByText('No projects yet')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Blog v2/ })).toHaveCount(0);
   await page.getByRole('tab', { name: 'archived' }).click();
   await page.getByRole('link', { name: /Blog v2/ }).click();
   await page.getByRole('button', { name: 'Restore' }).click();
@@ -128,11 +130,11 @@ test('project lifecycle: create, env vars, edit, archive, restore, delete', asyn
   await page.getByLabel(/to confirm/).fill('blog');
   await confirm.click();
   await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByText('No projects yet')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Blog/ })).toHaveCount(0);
 
   // Audit trail
   await page.getByRole('link', { name: 'Activity' }).click();
-  await expect(page.getByText('project.deleted')).toBeVisible();
+  await expect(page.getByText('Project deleted').first()).toBeVisible();
 
   expect(apiBodies.join('\n')).not.toContain(SECRET);
 });

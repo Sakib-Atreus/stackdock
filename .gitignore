@@ -32,3 +32,6 @@ data/
 # playwright
 test-results/
 playwright-report/
+
+# Private planning notes (kept locally, not on GitHub)
+docs/
