@@ -1,0 +1,31 @@
+{
+  "name": "stackdock",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @stackdock/db migrate:dev",
+    "db:deploy": "pnpm --filter @stackdock/db migrate:deploy",
+    "admin:create": "pnpm --filter @stackdock/api admin:create",
+    "admin:reset-password": "pnpm --filter @stackdock/api admin:reset-password",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "test:e2e": "pnpm --filter @stackdock/web test:e2e",
+    "secrets:reencrypt": "pnpm --filter @stackdock/api secrets:reencrypt"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "turbo": "^2.11.13"
+  }
+}

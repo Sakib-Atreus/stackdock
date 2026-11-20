@@ -1,0 +1,154 @@
+// StackDock database schema.
+// Models are added phase by phase — see docs/implementation-plan.md §3.4.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ActivityStatus {
+  SUCCESS
+  FAILURE
+}
+
+/// Audit log of important dashboard actions. Never store secrets in safeMetadata.
+model ActivityLog {
+  id           String         @id @default(cuid())
+  action       String
+  targetType   String?
+  targetId     String?
+  status       ActivityStatus
+  safeMetadata Json?
+  createdAt    DateTime       @default(now())
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}
+
+/// The single dashboard administrator (no public sign-up).
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  /// Argon2id PHC string. Never returned by the API.
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+}
+
+/// Server-side session. Only an HMAC of the cookie token is stored.
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  /// Truncated user agent, for the "active sessions" list. Not security relevant.
+  userAgent  String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum Provider {
+  NORTHFLANK
+}
+
+enum ProviderConnectionStatus {
+  CONNECTED
+  ERROR
+}
+
+/// An external provider credential. One row per provider (single admin).
+model ProviderConnection {
+  id                   String                   @id @default(cuid())
+  provider             Provider                 @unique
+  /// AES-256-GCM ciphertext ("v<keyVersion>.<iv>.<tag>.<data>"). Never returned by the API.
+  encryptedCredential  String
+  credentialKeyVersion Int
+  /// Last 4 characters of the token, for recognising it in the UI.
+  credentialHint       String
+  status               ProviderConnectionStatus
+  /// Non-secret account details from the provider (token name, team, role, expiry).
+  accountInfo          Json?
+  lastTestedAt         DateTime?
+  /// Safe error code only (e.g. NF_UNAUTHORIZED). Never a provider response body.
+  lastErrorCode        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+}
+
+enum ProjectRuntime {
+  AUTO
+  NODE
+  PYTHON
+  GO
+  PHP
+}
+
+enum ProjectStatus {
+  NOT_DEPLOYED
+  QUEUED
+  BUILDING
+  STARTING
+  RUNNING
+  CRASHED
+  STOPPED
+  FAILED
+}
+
+enum DesiredState {
+  RUNNING
+  STOPPED
+}
+
+/// A project StackDock runs. Registry metadata; not proof that anything is deployed.
+model Project {
+  id              String         @id @default(cuid())
+  /// Permanent. Also the URL / Northflank port name (1–8 chars, D-15).
+  slug            String         @unique
+  name            String
+  description     String?
+  repoUrl         String
+  branch          String
+  runtime         ProjectRuntime @default(AUTO)
+  rootDir         String         @default(".")
+  installCommand  String?
+  buildCommand    String?
+  startCommand    String?
+  healthCheckPath String?
+  /// Container port this project's public listener uses (10001–10999).
+  publicPort      Int            @unique
+  status          ProjectStatus  @default(NOT_DEPLOYED)
+  desiredState    DesiredState   @default(STOPPED)
+  lastCommitSha   String?
+  lastDeployedAt  DateTime?
+  archivedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  envVars         ProjectEnvVar[]
+
+  @@index([archivedAt])
+}
+
+/// Project environment variable. The value is encrypted (AAD = envvar:<projectId>:<key>).
+model ProjectEnvVar {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key            String
+  encryptedValue String
+  keyVersion     Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([projectId, key])
+}

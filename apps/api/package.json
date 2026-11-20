@@ -1,0 +1,49 @@
+{
+  "name": "@stackdock/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "admin:create": "node dist/cli/admin.js create",
+    "admin:reset-password": "node dist/cli/admin.js reset-password",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint -c ../../packages/config/oxlintrc.json src test",
+    "test": "vitest run && vitest run --config ./vitest.config.e2e.ts",
+    "test:unit": "vitest run",
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "secrets:reencrypt": "node dist/cli/secrets.js reencrypt"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.5.1",
+    "@nestjs/core": "^12.5.1",
+    "@nestjs/platform-express": "^12.5.1",
+    "@nestjs/throttler": "^6.8.0",
+    "@node-rs/argon2": "^2.2.2",
+    "@stackdock/db": "workspace:*",
+    "@stackdock/shared": "workspace:*",
+    "cookie": "^2.0.2",
+    "helmet": "^8.3.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/schematics": "^12.0.0",
+    "@nestjs/testing": "^12.5.1",
+    "@stackdock/config": "workspace:*",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.0.0",
+    "oxlint": "^1.58.0",
+    "pg": "^8.23.1",
+    "supertest": "^7.0.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.2"
+  }
+}
